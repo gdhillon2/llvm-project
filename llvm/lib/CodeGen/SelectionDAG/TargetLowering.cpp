@@ -1700,14 +1700,34 @@ bool TargetLowering::SimplifyDemandedBits(
                              Depth + 1))
       return true;
 
-    // If the operation can be done in a smaller type, do so.
-    if (ShrinkDemandedOp(Op, BitWidth, DemandedBits, TLO))
-      return true;
-
     // Include more potential optimizations for FNEG.
 
-    // Flip the sign bit.
-    Known = KnownBits::flipSignBit(Known);
+    Known.flipSignBit();
+    break;
+  }
+  case ISD::FCOPYSIGN: {
+    SDValue Magnitude = Op.getOperand(0);
+    SDValue Sign = Op.getOperand(1);
+
+    if (SimplifyDemandedBits(Magnitude, DemandedBits, DemandedElts, Known, TLO,
+                             Depth + 1))
+      return true;
+
+    APInt SignBit = APInt::getSignMask(BitWidth);
+    if (SimplifyDemandedBits(Sign, DemandedBits, DemandedElts, KnownBits, TLO,
+                             Depth + 1))
+      return true;
+
+    // Include more potential optimizations for FCOPYSIGN
+
+    // Clear sign bit from Magnitude's known information
+    Known.Zero &= ~SignBit;
+    Known.One &= ~SignBit;
+
+    // Add sign bit's known values
+    Known.Zero |= Known2.Zero & SignBit;
+    Known.One |= Known2.One & SignBit;
+
     break;
   }
   case ISD::SELECT:
