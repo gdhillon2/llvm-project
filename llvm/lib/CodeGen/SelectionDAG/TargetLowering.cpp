@@ -1702,7 +1702,10 @@ bool TargetLowering::SimplifyDemandedBits(
 
     // Include more potential optimizations for FNEG.
 
-    Known.flipSignBit();
+    if (Known.isNegative())
+        Known.makeNonNegative();
+    else
+        Known.makeNegative();
     break;
   }
   case ISD::FCOPYSIGN: {
@@ -1714,7 +1717,7 @@ bool TargetLowering::SimplifyDemandedBits(
       return true;
 
     APInt SignBit = APInt::getSignMask(BitWidth);
-    if (SimplifyDemandedBits(Sign, DemandedBits, DemandedElts, KnownBits, TLO,
+    if (SimplifyDemandedBits(Sign, SignBit & DemandedBits, DemandedElts, Known, TLO,
                              Depth + 1))
       return true;
 
