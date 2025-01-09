@@ -1696,40 +1696,22 @@ bool TargetLowering::SimplifyDemandedBits(
   case ISD::FNEG: {
     // Only one operand to FNEG.
     SDValue Op0 = Op.getOperand(0);
-    if (SimplifyDemandedBits(Op0, DemandedBits, DemandedElts, Known, TLO,
-                             Depth + 1))
-      return true;
-
-    // Include more potential optimizations for FNEG.
-
-    if (Known.isNegative())
-        Known.makeNonNegative();
-    else
-        Known.makeNegative();
-    break;
-  }
-  case ISD::FCOPYSIGN: {
-    SDValue Magnitude = Op.getOperand(0);
-    SDValue Sign = Op.getOperand(1);
-
-    if (SimplifyDemandedBits(Magnitude, DemandedBits, DemandedElts, Known, TLO,
-                             Depth + 1))
-      return true;
-
     APInt SignBit = APInt::getSignMask(BitWidth);
-    if (SimplifyDemandedBits(Sign, SignBit & DemandedBits, DemandedElts, Known, TLO,
-                             Depth + 1))
+
+    // If sign bit isn't demanded, remove FNEG operation
+    if (!DemandedBits.intersects(SignBit))
+        return TLO.CombineTo(Op, Op0);
+
+    if (SimplifyDemandedBits(Op0, DemandedBits, DemandedElts, Known, TLO, Depth + 1))
       return true;
 
-    // Include more potential optimizations for FCOPYSIGN
+    // Include more potential optimizations for FNEG (if possible).
 
-    // Clear sign bit from Magnitude's known information
-    Known.Zero &= ~SignBit;
-    Known.One &= ~SignBit;
-
-    // Add sign bit's known values
-    Known.Zero |= Known2.Zero & SignBit;
-    Known.One |= Known2.One & SignBit;
+    // Check if SignBit is known, and flip the bit if so
+    if (Known.Zero[BitWidth - 1] || Known.One[BitWidth - 1]) {
+        Known.Zero ^= SignBit;
+        Known.One ^= SignBit;
+    }
 
     break;
   }
